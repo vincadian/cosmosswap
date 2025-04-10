@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Cosmos Pro Swap</title>
+    <title>Swap on Arkh chain</title>
     <style>
         :root {
             --primary: #2f855a;
@@ -99,11 +99,6 @@
             margin-left: 8px;
         }
 
-        #status {
-            padding: 16px;
-            border-radius: 8px;
-            margin-top: 16px;
-        }
 
         .success {
             background: rgba(34, 197, 94, 0.1);
@@ -127,10 +122,101 @@
         .moderate-impact {
             color: #eab308; /* yellow color */
         }
-    </style>
+        .form-control{
+            padding: 5px;
+        }
+        #status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 16px;
+            border-radius: 8px;
+            z-index: 1000;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: opacity 0.3s ease;
+        }
+
+        #status.success {
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid var(--success);
+            color: var(--success);
+        }
+
+        #status.error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid var(--error);
+            color: var(--error);
+        }
+        #swap-route-visualization {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .swap-route-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin: 0 10px;
+        }
+
+        .swap-route-step .token-symbol {
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .swap-route-step .arrow {
+            font-size: 18px;
+            margin: 10px 0;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            background-color: #2f2f2f;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        th, td {
+            border: none;
+            padding: 8px 10px;
+            text-align: left;
+            font-size: 12px;
+        }
+
+        th {
+            background-color: #333;
+            font-weight: bold;
+            color: #fff;
+            text-transform: uppercase;
+        }
+
+        td {
+            color: #ccc;
+        }
+
+        tr:nth-child(even) {
+            background-color: #3f3f3f;
+        }
+
+        tr:hover {
+            background-color: #444;
+        }
+
+        th:first-child, td:first-child {
+            padding-left: 15px;
+        }
+
+        th:last-child, td:last-child {
+            padding-right: 15px;
+        }
+        </style>
 </head>
 <body>
-    <h1>🔄 Cosmos Pro Swap</h1>
+    <h1>Arkh Dex</h1>
     
     <div id="wallet-connect" class="card">
         <button class="button-primary" onclick="connectWallet()">Connect Keplr</button>
@@ -140,11 +226,15 @@
                 <span id="wallet-address"></span>
             </div>
         </div>
+        <div id="swap-history" style="margin-top: 20px;margin-bottom: 20px;"></div>
     </div>
 
     <div class="grid-container">
         <div class="main-content">
+            
+            
             <div class="card">
+
                 <div class="form-group">
                     <label>Select Liquidity Pool</label>
                     <select id="pool-list" class="form-control" onchange="loadPoolDetails()"></select>
@@ -192,16 +282,98 @@
                         <span id="swap-fee">0.00</span>
                     </div>
                 </div>
+                <div id="swap-route-visualization" style="margin-top: 20px;"></div>
 
                 <button class="button-primary" onclick="executeSwap()" style="width: 100%;">
                     Execute Swap
                 </button>
+            </div>
+            <!-- Add this inside the main-content div -->
+            <div class="card" style="margin-top: 24px;">
+                <h3>Create Liquidity Pool</h3>
+                <div class="form-group">
+                    <label>Pool Type</label>
+                    <select id="pool-type" class="form-control">
+                        <option value="1">Constant Product Pool</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Token A</label>
+                    <select id="token-a" class="form-control"></select>
+                </div>
+                <div class="form-group">
+                    <label>Token B</label>
+                    <select id="token-b" class="form-control"></select>
+                </div>
+                <button class="button-primary" onclick="createPool()">Create Pool</button>
+            </div>
+
+            <div class="card" style="margin-top: 24px;">
+                <h3>Add Liquidity</h3>
+                <div class="form-group">
+                    <label>Select Pool</label>
+                    <select id="pool-for-liquidity" class="form-control"></select>
+                </div>
+                <div class="form-group">
+                    <label>Token A Amount</label>
+                    <input type="number" id="token-a-amount" class="form-control" step="any">
+                </div>
+                <div class="form-group">
+                    <label>Token B Amount</label>
+                    <input type="number" id="token-b-amount" class="form-control" step="any">
+                </div>
+                <button class="button-primary" onclick="addLiquidity()">Add Liquidity</button>
             </div>
         </div>
 
         <div class="card">
             <h3>Pool Information</h3>
             <div id="pool-balances" style="margin-top: 12px;"></div>
+            <h3 style="margin-top: 20px;">Blockchain Status</h3>
+            <div id="blockchain-status" style="margin-top: 12px;">
+                <div class="balance-display">
+                    <span>Current Block:</span>
+                    <span id="current-block">Loading...</span>
+                </div>
+                <div class="balance-display">
+                    <span>Blockchain Status:</span>
+                    <span id="blockchain-status-text">Loading...</span>
+                </div>
+            </div>
+            <h3 style="margin-top: 20px;">ARKH FDV/Market-cap/staked</h3>
+            <div id="arkh-FDV" style="margin-top: 12px;">
+                <div class="balance-display">
+                    <span>Current FDV:</span>
+                    <span id="current-FDV">Loading...</span>
+                </div>
+            </div>
+            
+            <div id="arkh-staked" style="margin-top: 12px;">
+                <div class="balance-display">
+                    <span>ARKH Staked:</span>
+                    <span id="arkh-staked-amount">Loading...</span>
+                </div>
+                <div class="balance-display">
+                    <span>ARKH Staked ($):</span>
+                    <span id="arkh-staked-usd">Loading...</span>
+                </div>
+            </div>
+                        <h3 style="margin-top: 20px;">ARKH Price</h3>
+            <div id="arkh-price" style="margin-top: 12px;">
+                <div class="balance-display">
+                    <span>Current Price:</span>
+                    <span id="current-price">$0.0008</span>
+                </div>
+                <div class="balance-display">
+                    <span>24h Change:</span>
+                    <span id="24h-change">Loading...</span>
+                </div>
+            </div>
+            <h3 style="margin-top: 20px;">Token Supply</h3>
+
+            <div id="token-supplies"></div>
+
+
         </div>
     </div>
 
@@ -221,8 +393,8 @@
 
     <script>
         const chainId = 'arkh';
-        const apiUrl = 'https://arkh.api.m.anode.team';
-        const rpcUrl = 'https://arkh.rpc.m.anode.team';
+        const apiUrl = 'https://arkhadian-mainnet-api.bonynode.online';
+        const rpcUrl = 'https://arkhadian-mainnet-rpc.bonynode.online';
         const decimalMultiplier = 1e6;
 
         const tokenRegistry = {
@@ -242,6 +414,8 @@
         }
 
         async function connectWallet() {
+            await updateTokenSelectionForPool();
+            await updatePoolSelectionForLiquidity();
             try {
                 if (!window.keplr) throw new Error('Please install Keplr wallet');
                 
@@ -258,10 +432,225 @@
                 
                 await loadUserBalances();
                 await loadPools();
+
+                const swapHistory = await getSwapTransactionHistory(walletAddress);
+                displaySwapHistory(swapHistory);
+
             } catch (error) {
                 showStatus(`Wallet Error: ${error.message}`, 'error');
             }
         }
+        async function getSwapTransactionHistory(address) {
+            try {
+                const response = await fetch(`${apiUrl}/cosmos/tx/v1beta1/txs?events=message.sender='${address}'&events=message.action='MsgSwapWithinBatch'`);
+                const { txs } = await response.json();
+
+                return txs;
+            } catch (error) {
+                console.error(`Error fetching swap transaction history: ${error.message}`);
+                return null;
+            }
+        }
+
+        function displaySwapHistory(txs) {
+            const swapHistoryElement = document.getElementById('swap-history');
+            swapHistoryElement.innerHTML = '';
+
+            if (!txs || txs.length === 0) {
+                swapHistoryElement.textContent = 'No swap history';
+                return;
+            }
+
+            txs.forEach((tx) => {
+                const txElement = document.createElement('div');
+                const txHash = tx.txhash;
+                const timestamp = tx.timestamp;
+                const messages = tx.body.messages;
+
+                messages.forEach((message) => {
+                    if (message['@type'] === '/cosmos.liquidity.v1beta1.MsgSwapWithinBatch') {
+                        const swapAmount = message.offer_coin.amount;
+                        const tokenIn = formatDenom(message.offer_coin.denom);
+                        const tokenOut = formatDenom(message.demand_denom);
+
+                        txElement.innerHTML = `
+                            <p>TX Hash: ${txHash}</p>
+                            <p>Timestamp: ${new Date(timestamp).toLocaleString()}</p>
+                            <p>Swap Amount: ${swapAmount / decimalMultiplier} ${tokenIn}</p>
+                            <p>Token In: ${tokenIn}</p>
+                            <p>Token Out: ${tokenOut}</p>
+                        `;
+                    }
+                });
+
+                swapHistoryElement.appendChild(txElement);
+            });
+        }
+
+        // Add a div to display the swap history
+        const swapHistoryDiv = document.createElement('div');
+        swapHistoryDiv.id = 'swap-history';
+        swapHistoryDiv.style.marginTop = '20px';
+        document.querySelector('.main-content').appendChild(swapHistoryDiv);
+
+        async function getBlockchainStatus() {
+            try {
+                const response = await fetch(`${rpcUrl}/status`);
+                const { result } = await response.json();
+                
+                document.getElementById('current-block').textContent = result.sync_info.latest_block_height;
+                document.getElementById('blockchain-status-text').textContent = 
+                    result.sync_info.catching_up ? 'Syncing...' : 'Synced';
+            } catch (error) {
+                showStatus(`Blockchain Status Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Call getBlockchainStatus every 10 seconds
+        setInterval(getBlockchainStatus, 10000);
+        getBlockchainStatus(); // Initial call
+
+
+
+        async function getArkhFDV() {
+            try {
+                const totalSupplyResponse = await fetch(`${apiUrl}/cosmos/bank/v1beta1/supply`);
+                const { supply } = await totalSupplyResponse.json();
+                const arkhSupply = supply.find(coin => coin.denom === 'arkh').amount / decimalMultiplier;
+                const arkhPrice = 0.0008; // Fixed price
+
+                const FDV = arkhSupply * arkhPrice;
+                document.getElementById('current-FDV').textContent = `$${FDV.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+            } catch (error) {
+                console.error(`Error fetching ARKH FDV: ${error.message}`);
+                document.getElementById('current-FDV').textContent = 'Failed to fetch';
+            }
+        }
+
+        // Call getArkhMarketCap when the page loads
+        document.addEventListener('DOMContentLoaded', async () => {
+            // ... existing code ...
+            getArkhFDV();
+            // Update market cap every minute (though the price is fixed, supply might change)
+            setInterval(getArkhFDV, 60000);
+        });
+
+
+        async function getArkhStaked() {
+            try {
+                const stakingResponse = await fetch(`${apiUrl}/cosmos/staking/v1beta1/pool`);
+                const { pool } = await stakingResponse.json();
+                const bondedTokens = parseInt(pool.bonded_tokens);
+                const arkhStaked = bondedTokens / decimalMultiplier;
+                const arkhPrice = 0.0008; // Fixed price
+
+                document.getElementById('arkh-staked-amount').textContent = arkhStaked.toLocaleString('en-US', { minimumFractionDigits: 2 });
+                document.getElementById('arkh-staked-usd').textContent = `$${(arkhStaked * arkhPrice).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+            } catch (error) {
+                console.error(`Error fetching ARKH staked: ${error.message}`);
+                document.getElementById('arkh-staked-amount').textContent = 'Failed to fetch';
+                document.getElementById('arkh-staked-usd').textContent = 'Failed to fetch';
+            }
+        }
+
+        // Call getArkhStaked when the page loads
+        document.addEventListener('DOMContentLoaded', async () => {
+            // ... existing code ...
+            getArkhStaked();
+            // Update staked amount every minute
+            setInterval(getArkhStaked, 60000);
+        });
+
+        async function getAllTokenSupplies() {
+            try {
+                const response = await fetch(`${apiUrl}/cosmos/bank/v1beta1/supply`);
+                const data = await response.json();
+
+                const supplies = data.supply.map((supply) => {
+                    const denom = supply.denom;
+                    const amount = supply.amount / decimalMultiplier;
+                    return { denom, amount: amount.toFixed(6) };
+                });
+
+                return supplies;
+            } catch (error) {
+                console.error(`Error fetching token supplies: ${error.message}`);
+                return null;
+            }
+        }
+      // ...
+
+        function formatSupply(amount) {
+            const numAmount = parseFloat(amount);
+            if (numAmount >= 1e9) {
+                return `${(numAmount / 1e9).toFixed(2)}B`;
+            } else if (numAmount >= 1e6) {
+                return `${(numAmount / 1e6).toFixed(2)}M`;
+            } else if (numAmount >= 1e3) {
+                return `${(numAmount / 1e3).toFixed(2)}K`;
+            } else {
+                return numAmount.toFixed(2);
+            }
+        }
+        async function displayAllTokenSupplies() {
+            const supplies = await getAllTokenSupplies();
+            if (supplies !== null) {
+                const tokenSuppliesElement = document.getElementById('token-supplies');
+                tokenSuppliesElement.innerHTML = '';
+
+                const table = document.createElement('table');
+                table.style.width = '100%';
+                table.style.borderCollapse = 'collapse';
+
+                const headerRow = document.createElement('tr');
+                const tokenHeader = document.createElement('th');
+                tokenHeader.textContent = 'Token';
+                tokenHeader.style.border = '1px solid #ddd';
+                tokenHeader.style.padding = '8px';
+                headerRow.appendChild(tokenHeader);
+
+                const supplyHeader = document.createElement('th');
+                supplyHeader.textContent = 'Supply';
+                supplyHeader.style.border = '1px solid #ddd';
+                supplyHeader.style.padding = '8px';
+                headerRow.appendChild(supplyHeader);
+
+                table.appendChild(headerRow);
+
+                supplies.forEach((supply) => {
+                    const row = document.createElement('tr');
+                    const tokenCell = document.createElement('td');
+                    tokenCell.textContent = formatDenom(supply.denom);
+                    tokenCell.style.border = 'none';
+                    tokenCell.style.padding = '8px 10px';
+                    row.appendChild(tokenCell);
+
+                    const supplyCell = document.createElement('td');
+                    supplyCell.textContent = formatSupply(supply.amount);
+                    supplyCell.style.border = 'none';
+                    supplyCell.style.padding = '8px 10px';
+                    row.appendChild(supplyCell);
+
+                    table.appendChild(row);
+            
+                });
+
+                tokenSuppliesElement.appendChild(table);
+            } else {
+                document.getElementById('token-supplies').textContent = 'Failed to fetch token supplies';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            // ...
+            displayAllTokenSupplies();
+        });
+
+
+        
+ 
+        
+
 
         async function loadUserBalances() {
             try {
@@ -521,7 +910,202 @@
                 priceImpactElement.classList.remove('high-impact', 'moderate-impact');
             }
         }
+        // Update token selection for creating pool
+        async function updateTokenSelectionForPool() {
+            try {
+                const response = await fetch(`${apiUrl}/cosmos/bank/v1beta1/supply`);
+                const { supply } = await response.json();
+                
+                const tokenDenoms = supply.map(coin => coin.denom);
+                const tokenASelect = document.getElementById('token-a');
+                const tokenBSelect = document.getElementById('token-b');
+                
+                tokenASelect.innerHTML = tokenDenoms.map(denom => `
+                    <option value="${denom}">${formatDenom(denom)}</option>
+                `).join('');
+                
+                tokenBSelect.innerHTML = tokenDenoms.map(denom => `
+                    <option value="${denom}">${formatDenom(denom)}</option>
+                `).join('');
+            } catch (error) {
+                showStatus(`Token Load Error: ${error.message}`, 'error');
+            }
+        }
 
+        // Update pool selection for adding liquidity
+        async function updatePoolSelectionForLiquidity() {
+            try {
+                const response = await fetch(`${apiUrl}/cosmos/liquidity/v1beta1/pools`);
+                const { pools } = await response.json();
+                
+                const poolSelect = document.getElementById('pool-for-liquidity');
+                poolSelect.innerHTML = pools.map(pool => `
+                    <option value="${pool.id}">
+                        ${formatDenoms(pool.reserve_coin_denoms)}
+                    </option>
+                `).join('');
+            } catch (error) {
+                showStatus(`Pool Load Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Create liquidity pool
+        async function createPool() {
+            try {
+                if (!window.keplr || !walletAddress) throw new Error('Wallet not connected');
+                
+                const offlineSigner = window.keplr.getOfflineSigner(chainId);
+                const client = await SigningStargateClient.connectWithSigner(
+                    rpcUrl,
+                    offlineSigner
+                );
+
+                const poolType = parseInt(document.getElementById('pool-type').value);
+                const tokenADenom = document.getElementById('token-a').value;
+                const tokenBDenom = document.getElementById('token-b').value;
+
+                const msg = {
+                    typeUrl: '/cosmos.liquidity.v1beta1.MsgCreatePool',
+                    value: {
+                        pool_creator_address: walletAddress,
+                        pool_type_id: poolType,
+                        deposit_coins: [
+                            { denom: tokenADenom, amount: '1000000' }, // initial deposit
+                            { denom: tokenBDenom, amount: '1000000' }  // initial deposit
+                        ]
+                    }
+                };
+
+                const tx = await client.signAndBroadcast(
+                    walletAddress,
+                    [msg],
+                    {
+                        amount: [],
+                        gas: "300000",
+                        feeDenom: "uarkh"
+                    }
+                );
+
+                showStatus(`Pool created successfully! TX Hash: ${tx.transactionHash}`, 'success');
+                await updatePoolSelectionForLiquidity();
+                await loadPools();
+            } catch (error) {
+                showStatus(`Pool Creation Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Add liquidity to pool
+        async function addLiquidity() {
+            try {
+                if (!window.keplr || !walletAddress) throw new Error('Wallet not connected');
+                
+                const offlineSigner = window.keplr.getOfflineSigner(chainId);
+                const client = await SigningStargateClient.connectWithSigner(
+                    rpcUrl,
+                    offlineSigner
+                );
+
+                const poolId = document.getElementById('pool-for-liquidity').value;
+                const tokenAAmount = parseFloat(document.getElementById('token-a-amount').value);
+                const tokenBAmount = parseFloat(document.getElementById('token-b-amount').value);
+
+                const msg = {
+                    typeUrl: '/cosmos.liquidity.v1beta1.MsgDepositWithinBatch',
+                    value: {
+                        depositor_address: walletAddress,
+                        pool_id: poolId,
+                        deposit_coins: [
+                            { denom: currentPool.denoms[0], amount: String(Math.floor(tokenAAmount * decimalMultiplier)) },
+                            { denom: currentPool.denoms[1], amount: String(Math.floor(tokenBAmount * decimalMultiplier)) }
+                        ]
+                    }
+                };
+
+                const tx = await client.signAndBroadcast(
+                    walletAddress,
+                    [msg],
+                    {
+                        amount: [],
+                        gas: "300000",
+                        feeDenom: "uarkh"
+                    }
+                );
+
+                showStatus(`Liquidity added successfully! TX Hash: ${tx.transactionHash}`, 'success');
+                await loadUserBalances();
+                await loadPoolDetails();
+            } catch (error) {
+                showStatus(`Liquidity Addition Error: ${error.message}`, 'error');
+            }
+        }
+
+        // ... existing code ...
+
+        function calculatePrice() {
+            try {
+                const fromDenom = document.getElementById('from-denom').value;
+                const toDenom = document.getElementById('to-denom').value;
+                const fromAmount = parseFloat(document.getElementById('from-amount').value) || 0;
+                
+                const fromReserve = parseFloat(currentPool.reserves[fromDenom]);
+                const toReserve = parseFloat(currentPool.reserves[toDenom]);
+
+                // Constant product formula
+                const k = fromReserve * toReserve;
+                const newFrom = fromReserve + fromAmount;
+                const newTo = k / newFrom;
+                const output = toReserve - newTo;
+                const priceImpact = ((fromAmount / (fromReserve + fromAmount)) * 100);
+                const fee = (fromAmount * 0.003);
+
+                document.getElementById('to-amount').value = output.toFixed(6);
+                document.getElementById('price-impact').textContent = `${priceImpact.toFixed(2)}%`;
+                document.getElementById('swap-fee').textContent = `${fee.toFixed(6)} ${formatDenom(fromDenom)}`;
+                
+                // Show price impact warning
+                showPriceImpactWarning(priceImpact);
+
+                // Determine swap route
+                const swapRoute = determineSwapRoute(fromDenom, toDenom);
+                visualizeSwapRoute(swapRoute);
+            } catch (error) {
+                showStatus(`Calculation Error: ${error.message}`, 'error');
+            }
+        }
+
+        function determineSwapRoute(fromDenom, toDenom) {
+            // For now, assume a simple swap route
+            const swapRoute = [
+                { tokenSymbol: formatDenom(fromDenom) },
+                { tokenSymbol: formatDenom(toDenom) }
+            ];
+
+            // If the tokens are the same, return an empty route
+            if (fromDenom === toDenom) {
+                return [];
+            }
+
+            return swapRoute;
+        }
+
+        function visualizeSwapRoute(swapRoute) {
+            const visualizationDiv = document.getElementById('swap-route-visualization');
+            visualizationDiv.innerHTML = '';
+
+            if (swapRoute.length === 0) {
+                visualizationDiv.textContent = 'No swap route';
+                return;
+            }
+
+            const routeText = swapRoute.map((step) => step.tokenSymbol).join(' → ');
+            const routeSpan = document.createElement('span');
+            routeSpan.textContent = routeText;
+            routeSpan.style.fontSize = '16px';
+            routeSpan.style.fontWeight = 'bold';
+
+            visualizationDiv.appendChild(routeSpan);
+        }
+                    
     </script>
 </body>
 </html>
