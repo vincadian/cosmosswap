@@ -347,6 +347,13 @@
                     <span id="current-FDV">Loading...</span>
                 </div>
             </div>
+            <div id="arkh-marketcap" style="margin-top: 12px;">
+                <div class="balance-display">
+                    <span>Current MC:</span>
+                    <span id="current-market-cap">Loading...</span>
+                </div>
+            </div>
+            
             
             <div id="arkh-staked" style="margin-top: 12px;">
                 <div class="balance-display">
@@ -358,7 +365,7 @@
                     <span id="arkh-staked-usd">Loading...</span>
                 </div>
             </div>
-                        <h3 style="margin-top: 20px;">ARKH Price</h3>
+            <h3 style="margin-top: 20px;">ARKH Price</h3>
             <div id="arkh-price" style="margin-top: 12px;">
                 <div class="balance-display">
                     <span>Current Price:</span>
@@ -379,21 +386,11 @@
 
     <div id="status"></div>
 
-    <!-- CosmJS Dependencies -->
-    <!-- Add type="module" and use specific ESM paths -->
-    <script type="module">
-    import { assert } from 'https://cdn.jsdelivr.net/npm/@cosmjs/utils@0.29.5/+esm';
-    import { Decimal } from 'https://cdn.jsdelivr.net/npm/@cosmjs/math@0.29.5/+esm';
-    import { toBase64 } from 'https://cdn.jsdelivr.net/npm/@cosmjs/encoding@0.29.5/+esm';
-    import { encodeSecp256k1Signature } from 'https://cdn.jsdelivr.net/npm/@cosmjs/amino@0.29.5/+esm';
-    import { SigningStargateClient } from 'https://cdn.jsdelivr.net/npm/@cosmjs/stargate@0.29.5/+esm';
-    
-    // Your code here
-    </script>
+
 
     <script>
         const chainId = 'arkh';
-        const apiUrl = 'https://arkhadian-mainnet-api.bonynode.online';
+        const apiUrl = 'https://arkh.api.m.anode.team/';
         const rpcUrl = 'https://arkhadian-mainnet-rpc.bonynode.online';
         const decimalMultiplier = 1e6;
 
@@ -533,6 +530,35 @@
             getArkhFDV();
             // Update market cap every minute (though the price is fixed, supply might change)
             setInterval(getArkhFDV, 60000);
+        });
+
+        async function getArkhMarketCap() {
+            try {
+                const totalSupplyResponse = await fetch(`${apiUrl}/cosmos/bank/v1beta1/supply`);
+                const { supply } = await totalSupplyResponse.json();
+                const arkhCoin = supply.find(coin => coin.denom === 'arkh');
+
+                if (!arkhCoin) {
+                    throw new Error('ARKH coin not found in supply');
+                }
+
+                const totalSupply = arkhCoin.amount / decimalMultiplier;
+                const circulatingSupply = totalSupply - 800000000;
+                const arkhPrice = 0.0008; // Fixed price
+
+                const marketCap = circulatingSupply * arkhPrice;
+                document.getElementById('current-market-cap').textContent = `$${marketCap.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+            } catch (error) {
+                console.error(`Error fetching ARKH market cap: ${error.message}`);
+                document.getElementById('current-market-cap').textContent = 'Failed to fetch';
+            }
+        }
+        // Call getArkhMarketCap when the page loads
+        document.addEventListener('DOMContentLoaded', async () => {
+            // ... existing code ...
+            getArkhMarketCap();
+            // Update market cap every minute
+            setInterval(getArkhMarketCap, 60000);
         });
 
 
@@ -764,90 +790,83 @@
                 `).join('');
         }
 
-        function calculatePrice() {
-            try {
-                const fromDenom = document.getElementById('from-denom').value;
-                const toDenom = document.getElementById('to-denom').value;
-                const fromAmount = parseFloat(document.getElementById('from-amount').value) || 0;
-                
-                const fromReserve = parseFloat(currentPool.reserves[fromDenom]);
-                const toReserve = parseFloat(currentPool.reserves[toDenom]);
-
-                // Constant product formula
-                const k = fromReserve * toReserve;
-                const newFrom = fromReserve + fromAmount;
-                const newTo = k / newFrom;
-                const output = toReserve - newTo;
-                const priceImpact = ((fromAmount / (fromReserve + fromAmount)) * 100).toFixed(2);
-                const fee = (fromAmount * 0.003).toFixed(6);
-
-                document.getElementById('to-amount').value = output.toFixed(6);
-                document.getElementById('price-impact').textContent = `${priceImpact}%`;
-                document.getElementById('swap-fee').textContent = `${fee} ${formatDenom(fromDenom)}`;
-            } catch (error) {
-                showStatus(`Calculation Error: ${error.message}`, 'error');
-            }
-        }
+        
+        
         async function executeSwap() {
+
+            
             try {
-                const { SigningStargateClient } = cosmjsStargate;
-                const { Registry } = cosmjsProtoSigning;
-                const { AminoTypes } = cosmjsAmino;
+                const { SigningStargateClient } = await import('https://cdn.jsdelivr.net/npm/@cosmjs/stargate@0.29.3/+esm');
+                console.log('SigningStargateClient imported:', SigningStargateClient);
+
+                const { Registry } = await import('https://cdn.jsdelivr.net/npm/@cosmjs/proto-signing@0.29.3/+esm');
+                console.log('Registry imported:', Registry);
+                
+
+
+                
+
 
                 if (!window.keplr || !walletAddress) throw new Error('Wallet not connected');
                 
                 const offlineSigner = window.keplr.getOfflineSigner(chainId);
+                console.log('offlineSigner:', offlineSigner);
+
                 
                 const client = await SigningStargateClient.connectWithSigner(
                     rpcUrl,
                     offlineSigner,
                     {
-                        registry: new Registry(),
-                        aminoTypes: new AminoTypes()
+                        registry: new Registry()
                     }
                 );
+
+                console.log('client:', client);
+
 
                 const fromDenom = document.getElementById('from-denom').value;
                 const toDenom = document.getElementById('to-denom').value;
                 const fromAmount = document.getElementById('from-amount').value;
-                const outputAmount = document.getElementById('to-amount').value;
 
                 const msg = {
                     typeUrl: '/cosmos.liquidity.v1beta1.MsgSwapWithinBatch',
                     value: {
                         swap_requester_address: walletAddress,
                         pool_id: currentPool.id,
-                        swap_type: currentPool.denoms[0] === fromDenom ? 1 : 2,
+                        swap_type_id: 1,
                         offer_coin: {
                             denom: fromDenom,
                             amount: String(Math.floor(fromAmount * decimalMultiplier))
                         },
                         demand_denom: toDenom,
-                        offer_coin_fee: {
-                            denom: fromDenom,
-                            amount: String(Math.floor(fromAmount * 0.003 * decimalMultiplier))
-                        },
-                        order_price: outputAmount
+                        offer_coin_fee: [], // Optional
+                        order_price: '0' // Optional
                     }
+                };
+
+                const fee = {
+                    amount: [],
+                    gas: "300000",
+                    feeDenom: "arkh"
                 };
 
                 const tx = await client.signAndBroadcast(
                     walletAddress,
                     [msg],
-                    {
-                        amount: [],
-                        gas: "300000",
-                        feeDenom: "uarkh"
-                    }
+                    fee
                 );
+
+                if (tx.code !== 0) {
+                    throw new Error(`Transaction failed with code ${tx.code}`);
+                }
 
                 showStatus(`Swap successful! TX Hash: ${tx.transactionHash}`, 'success');
                 await Promise.all([loadUserBalances(), loadPoolDetails()]);
             } catch (error) {
+                console.error('Error executing swap:', error);
                 showStatus(`Swap Failed: ${error.message}`, 'error');
             }
         }
-
         
 
         function formatDenom(denom) {
@@ -865,33 +884,7 @@
             if (type === 'success') setTimeout(() => statusDiv.innerHTML = '', 15000);
         }
 
-        function calculatePrice() {
-            try {
-                const fromDenom = document.getElementById('from-denom').value;
-                const toDenom = document.getElementById('to-denom').value;
-                const fromAmount = parseFloat(document.getElementById('from-amount').value) || 0;
-                
-                const fromReserve = parseFloat(currentPool.reserves[fromDenom]);
-                const toReserve = parseFloat(currentPool.reserves[toDenom]);
-
-                // Constant product formula
-                const k = fromReserve * toReserve;
-                const newFrom = fromReserve + fromAmount;
-                const newTo = k / newFrom;
-                const output = toReserve - newTo;
-                const priceImpact = ((fromAmount / (fromReserve + fromAmount)) * 100);
-                const fee = (fromAmount * 0.003);
-
-                document.getElementById('to-amount').value = output.toFixed(6);
-                document.getElementById('price-impact').textContent = `${priceImpact.toFixed(2)}%`;
-                document.getElementById('swap-fee').textContent = `${fee.toFixed(6)} ${formatDenom(fromDenom)}`;
-                
-                // Show price impact warning
-                showPriceImpactWarning(priceImpact);
-            } catch (error) {
-                showStatus(`Calculation Error: ${error.message}`, 'error');
-            }
-        }
+        
         
         function showPriceImpactWarning(priceImpact) {
             const warningDiv = document.getElementById('price-impact-warning');
