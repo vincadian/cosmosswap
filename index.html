@@ -388,7 +388,7 @@
 
 
 
-    <script>
+    <script type="module">
         const chainId = 'arkh';
         const apiUrl = 'https://arkh.api.m.anode.team/';
         const rpcUrl = 'https://arkhadian-mainnet-rpc.bonynode.online';
@@ -403,7 +403,14 @@
         let walletAddress = null;
         let currentPool = null;
         let userBalances = {};
+        
 
+        window.connectWallet = connectWallet;
+        window.loadPoolDetails = loadPoolDetails;
+        window.executeSwap = executeSwap;
+        window.createPool = createPool;
+        window.addLiquidity = addLiquidity;
+        window.calculatePrice = calculatePrice;
         // Fixed function added here
         function updateSwapParams() {
             updateBalances();
@@ -793,40 +800,34 @@
         
         
         async function executeSwap() {
-
-            
             try {
-                const { SigningStargateClient } = await import('https://cdn.jsdelivr.net/npm/@cosmjs/stargate@0.29.3/+esm');
-                console.log('SigningStargateClient imported:', SigningStargateClient);
+                const { SigningStargateClient, defaultRegistryTypes } = await import('https://cdn.jsdelivr.net/npm/@cosmjs/stargate@0.28.11/+esm');
+                const { Registry } = await import('https://cdn.jsdelivr.net/npm/@cosmjs/proto-signing@0.28.11/+esm');
+                const { load } = await import('https://cdn.jsdelivr.net/npm/protobufjs@7.2.4/+esm');
 
-                const { Registry } = await import('https://cdn.jsdelivr.net/npm/@cosmjs/proto-signing@0.29.3/+esm');
-                console.log('Registry imported:', Registry);
-                
+                const root = await load('https://raw.githubusercontent.com/tendermint/liquidity/main/proto/liquidity/v1beta1/liquidity.proto');
+                const MsgSwapWithinBatch = root.lookupType('cosmos.liquidity.v1beta1.MsgSwapWithinBatch');
 
-
-                
-
+                const registry = new Registry(defaultRegistryTypes);
+                registry.register('/cosmos.liquidity.v1beta1.MsgSwapWithinBatch', MsgSwapWithinBatch);
 
                 if (!window.keplr || !walletAddress) throw new Error('Wallet not connected');
                 
                 const offlineSigner = window.keplr.getOfflineSigner(chainId);
-                console.log('offlineSigner:', offlineSigner);
-
-                
                 const client = await SigningStargateClient.connectWithSigner(
                     rpcUrl,
                     offlineSigner,
                     {
-                        registry: new Registry()
+                        registry: registry
                     }
                 );
-
-                console.log('client:', client);
-
 
                 const fromDenom = document.getElementById('from-denom').value;
                 const toDenom = document.getElementById('to-denom').value;
                 const fromAmount = document.getElementById('from-amount').value;
+
+                if (!currentPool) throw new Error('No pool selected');
+                if (isNaN(parseFloat(fromAmount))) throw new Error('Invalid amount');
 
                 const msg = {
                     typeUrl: '/cosmos.liquidity.v1beta1.MsgSwapWithinBatch',
@@ -839,15 +840,17 @@
                             amount: String(Math.floor(fromAmount * decimalMultiplier))
                         },
                         demand_denom: toDenom,
-                        offer_coin_fee: [], // Optional
-                        order_price: '0' // Optional
+                        offer_coin_fee: [], 
+                        order_price: '0' 
                     }
                 };
 
                 const fee = {
-                    amount: [],
-                    gas: "300000",
-                    feeDenom: "arkh"
+                    amount: [{
+                        denom: 'uarkh',
+                        amount: '5000'
+                    }],
+                    gas: '200000'
                 };
 
                 const tx = await client.signAndBroadcast(
@@ -864,10 +867,10 @@
                 await Promise.all([loadUserBalances(), loadPoolDetails()]);
             } catch (error) {
                 console.error('Error executing swap:', error);
+                console.log(error.stack);
                 showStatus(`Swap Failed: ${error.message}`, 'error');
             }
         }
-        
 
         function formatDenom(denom) {
             return tokenRegistry[denom]?.symbol || denom;
