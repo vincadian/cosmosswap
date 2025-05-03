@@ -599,11 +599,51 @@
                 const response = await fetch(`${apiUrl}/cosmos/bank/v1beta1/supply`);
                 const data = await response.json();
 
-                const supplies = data.supply.map((supply) => {
+                // Fetch token metadata
+                const metadataResponse = await fetch(`${apiUrl}/cosmos/bank/v1beta1/denoms_metadata`);
+                const metadataData = await metadataResponse.json();
+                
+                // Create a map of base denoms to their display names
+                const metadataMap = metadataData.metadatas.reduce((acc, metadata) => {
+                    if (metadata.base) {
+                        acc[metadata.base] = metadata.display;
+                    }
+                    return acc;
+                }, {});
+
+                // Process supplies with IBC denom tracing
+                const supplies = await Promise.all(data.supply.map(async (supply) => {
                     const denom = supply.denom;
                     const amount = supply.amount / decimalMultiplier;
-                    return { denom, amount: amount.toFixed(6) };
-                });
+                    
+                    // Check if it's an IBC token
+                    if (denom.startsWith('ibc/')) {
+                        try {
+                            // Get the denom trace to find the original token
+                            const traceResponse = await fetch(`${apiUrl}/ibc/apps/transfer/v1/denom_traces/${denom.replace('ibc/', '')}`);
+                            const traceData = await traceResponse.json();
+                            
+                            if (traceData.denom_trace && traceData.denom_trace.base_denom) {
+                                // Extract the original token name from the base denom
+                                const baseDenom = traceData.denom_trace.base_denom;
+                                // Remove the 'u' prefix if it exists
+                                const displayName = baseDenom.startsWith('u') ? baseDenom.slice(1).toUpperCase() : baseDenom.toUpperCase();
+                                return { denom, amount: amount.toFixed(6), displayName };
+                            }
+                        } catch (error) {
+                            console.error(`Error fetching denom trace for ${denom}:`, error);
+                        }
+                        return { denom, amount: amount.toFixed(6), displayName: denom };
+                    }
+                    
+                    // For non-IBC tokens, use the token registry
+                    const tokenInfo = tokenRegistry[denom];
+                    return { 
+                        denom, 
+                        amount: amount.toFixed(6), 
+                        displayName: tokenInfo ? tokenInfo.symbol : denom 
+                    };
+                }));
 
                 return supplies;
             } catch (error) {
@@ -611,7 +651,6 @@
                 return null;
             }
         }
-      // ...
 
         function formatSupply(amount) {
             const numAmount = parseFloat(amount);
@@ -625,6 +664,7 @@
                 return numAmount.toFixed(2);
             }
         }
+
         async function displayAllTokenSupplies() {
             const supplies = await getAllTokenSupplies();
             if (supplies !== null) {
@@ -653,7 +693,7 @@
                 supplies.forEach((supply) => {
                     const row = document.createElement('tr');
                     const tokenCell = document.createElement('td');
-                    tokenCell.textContent = formatDenom(supply.denom);
+                    tokenCell.textContent = supply.displayName;
                     tokenCell.style.border = 'none';
                     tokenCell.style.padding = '8px 10px';
                     row.appendChild(tokenCell);
@@ -665,7 +705,6 @@
                     row.appendChild(supplyCell);
 
                     table.appendChild(row);
-            
                 });
 
                 tokenSuppliesElement.appendChild(table);
